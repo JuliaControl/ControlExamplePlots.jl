@@ -100,11 +100,13 @@ function get_message(res, org, new_org, old_commit, new_branch_name)
     for r in res
         if r.status != ControlExamplePlots.EXACT_MATCH
             ndiff += 1
-            diff = (isdefined(r, :diff) && isa(r.diff, Number)) ? r.diff : 1.0
+            # An image that could not be loaded has status PROCESSING_ERROR and diff 1.0
+            has_diff = r.status != ControlExamplePlots.PROCESSING_ERROR && isdefined(r, :diff) && isa(r.diff, Number)
+            diff = has_diff ? r.diff : 1.0
             # Symbol in front of number
             symbol = ( diff < 0.015 ? good : (diff < 0.03 ? warning : error))
             # Number/message we print
-            status = (isdefined(r, :diff) && isa(r.diff, Number)) ? round(r.diff, digits=3) : string(r.status)
+            status = has_diff ? round(r.diff, digits=3) : string(r.status)
             # Name of file
             fig_name = basename(r.refFilename)
             # Append figure to message
@@ -156,7 +158,9 @@ try
     println("adding packages")
     Pkg.add("UUIDs")
     Pkg.add("GitHub")
-    Pkg.add("ImageMagick") # Has no UUID
+    # FileIO loads PNG files with ImageIO when it is installed, otherwise with ImageMagick.
+    # ImageMagick_jll v7.1.2001 requires libgs.so.9, which Ghostscript_jll v10 does not provide.
+    Pkg.add("ImageIO")
 
     println("running checkout_ControlSystems_PR")
     checkout_ControlSystems_PR(org, origin, ENV["PR_ID"])
@@ -168,6 +172,9 @@ try
     res, ndiff = gen_figures()
 
     println("$ndiff images have changes")
+    for r in res
+        r.status == ControlExamplePlots.PROCESSING_ERROR && println("Failed to compare $(basename(r.refFilename)): ", r.err)
+    end
     import UUIDs
     
     
